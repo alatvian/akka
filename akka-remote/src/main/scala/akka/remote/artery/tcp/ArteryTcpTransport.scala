@@ -152,19 +152,13 @@ private[remote] class ArteryTcpTransport(_system: ExtendedActorSystem, _provider
         }
       }
 
-      if (streamId == ControlStreamId) {
-        // restart of inner connection part important in control flow, since system messages
-        // are buffered and resent from the outer SystemMessageDelivery stage.
-        RestartFlow.withBackoff[ByteString, ByteString](
-          settings.Advanced.OutboundRestartBackoff,
-          settings.Advanced.GiveUpSystemMessageAfter, 0.1)(flowFactory)
-      } else {
-        // Best effort retry a few times
-        RestartFlow.withBackoff[ByteString, ByteString](
-          settings.Advanced.OutboundRestartBackoff,
-          settings.Advanced.OutboundRestartBackoff * 5, 0.1, maxRestarts = 3)(flowFactory)
-      }
-
+      val maxRestarts = if (streamId == ControlStreamId) Int.MaxValue else 3
+      // Restart of inner connection part important in control stream, since system messages
+      // are buffered and resent from the outer SystemMessageDelivery stage. No maxRestarts limit for control
+      // stream. For message stream it's best effort retry a few times.
+      RestartFlow.withBackoff[ByteString, ByteString](
+        settings.Advanced.OutboundRestartBackoff,
+        settings.Advanced.OutboundRestartBackoff * 5, 0.1, maxRestarts)(flowFactory)
     }
 
     Flow[EnvelopeBuffer]
