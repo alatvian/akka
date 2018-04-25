@@ -812,13 +812,20 @@ private[remote] abstract class ArteryTransport(_system: ExtendedActorSystem, _pr
   // Checks for termination hint messages and sends an ACK for those (not processing them further)
   // Purpose of this stage is flushing, the sender can wait for the ACKs up to try flushing
   // pending messages.
-  def terminationHintReplier(): Flow[InboundEnvelope, InboundEnvelope, NotUsed] = {
+  def terminationHintReplier(inControlStream: Boolean): Flow[InboundEnvelope, InboundEnvelope, NotUsed] = {
     Flow[InboundEnvelope].filter { envelope ⇒
       envelope.message match {
-        case _: ActorSystemTerminating ⇒
+        case ActorSystemTerminating(from) ⇒
           envelope.sender match {
-            case OptionVal.Some(snd) ⇒ snd.tell(ActorSystemTerminatingAck(localAddress), ActorRef.noSender)
-            case OptionVal.None      ⇒ log.error("Expected sender for ActorSystemTerminating message")
+            case OptionVal.Some(snd) ⇒
+              snd.tell(ActorSystemTerminatingAck(localAddress), ActorRef.noSender)
+              if (inControlStream)
+                system.scheduler.scheduleOnce(settings.Advanced.ShutdownFlushTimeout) {
+                  if (!isShutdown)
+                    quarantine(from.address, Some(from.uid), "ActorSystem terminated")
+                }(materializer.executionContext)
+            case OptionVal.None ⇒
+              log.error("Expected sender for ActorSystemTerminating message from [{}]", from)
           }
           false
         case _ ⇒ true
@@ -830,7 +837,7 @@ private[remote] abstract class ArteryTransport(_system: ExtendedActorSystem, _pr
     Flow[InboundEnvelope]
       .via(createDeserializer(bufferPool))
       .via(if (settings.Advanced.TestMode) new InboundTestStage(this, testState) else Flow[InboundEnvelope])
-      .via(terminationHintReplier())
+      .via(terminationHintReplier(inControlStream = false))
       .via(new InboundHandshake(this, inControlStream = false))
       .via(new InboundQuarantineCheck(this))
       .toMat(messageDispatcherSink)(Keep.right)
@@ -849,7 +856,7 @@ private[remote] abstract class ArteryTransport(_system: ExtendedActorSystem, _pr
     Flow[InboundEnvelope]
       .via(createDeserializer(envelopeBufferPool))
       .via(if (settings.Advanced.TestMode) new InboundTestStage(this, testState) else Flow[InboundEnvelope])
-      .via(terminationHintReplier())
+      .via(terminationHintReplier(inControlStream = true))
       .via(new InboundHandshake(this, inControlStream = true))
       .via(new InboundQuarantineCheck(this))
       .viaMat(new InboundControlJunction)(Keep.right)

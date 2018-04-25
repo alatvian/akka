@@ -470,7 +470,7 @@ private[remote] class Association(
                 log.warning(
                   "Association to [{}] with UID [{}] is irrecoverably failed. UID is now quarantined and all " +
                     "messages to this UID will be delivered to dead letters. " +
-                    "Remote actorsystem must be restarted to recover from this situation. {}",
+                    "Remote actorsystem must be restarted to recover from this situation. Reason: {}",
                   remoteAddress, u, reason)
                 transport.system.eventStream.publish(QuarantinedEvent(remoteAddress, u))
                 flightRecorder.loFreq(Transport_Quarantined, s"$remoteAddress - $u")
