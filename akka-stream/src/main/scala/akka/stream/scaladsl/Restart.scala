@@ -435,7 +435,7 @@ private abstract class RestartWithBackoffLogic[S <: Shape](
         if (finishing || maxRestartsReached() || onlyOnFailures) {
           complete(out)
         } else {
-          log.debug("Restarting graph due to finished upstream")
+          log.debug("Restarting stream due to finished upstream")
           scheduleRestartTimer()
         }
       }
@@ -443,7 +443,7 @@ private abstract class RestartWithBackoffLogic[S <: Shape](
         if (finishing || maxRestartsReached()) {
           fail(out, ex)
         } else {
-          log.error(ex, "Restarting graph due to failure")
+          log.error(ex, "Restarting stream due to failure")
           scheduleRestartTimer()
         }
       }
@@ -475,7 +475,7 @@ private abstract class RestartWithBackoffLogic[S <: Shape](
         if (finishing || maxRestartsReached() || onlyOnFailures) {
           cancel(in)
         } else {
-          log.debug("Graph in finished")
+          log.debug("Stream in finished")
           scheduleRestartTimer()
         }
       }
@@ -501,7 +501,7 @@ private abstract class RestartWithBackoffLogic[S <: Shape](
   protected final def maxRestartsReached() = {
     // Check if the last start attempt was more than the minimum backoff
     if (resetDeadline.isOverdue()) {
-      log.debug("Last restart attempt was more than {} ago, resetting restart count", minBackoff)
+      log.debug("Last restart attempt was more than [{}] ms ago, resetting restart count", minBackoff.toMillis)
       restartCount = 0
     }
     restartCount == maxRestarts
@@ -510,15 +510,16 @@ private abstract class RestartWithBackoffLogic[S <: Shape](
   // Set a timer to restart after the calculated delay
   protected final def scheduleRestartTimer() = {
     val restartDelay = BackoffSupervisor.calculateDelay(restartCount, minBackoff, maxBackoff, randomFactor)
-    log.debug("Restarting graph in {}", restartDelay)
     scheduleOnce("RestartTimer", restartDelay)
     restartCount += 1
+    log.debug("Restarting stream in [{}] ms, count [{}]", restartDelay.toMillis, restartCount)
     // And while we wait, we go into backoff mode
     backoff()
   }
 
   // Invoked when the backoff timer ticks
   override protected def onTimer(timerKey: Any) = {
+    log.debug("Starting stream after backoff")
     startGraph()
     resetDeadline = minBackoff.fromNow
   }
