@@ -408,7 +408,7 @@ private[remote] class ArteryTcpTransport(_system: ExtendedActorSystem, _provider
   }
 
   override protected def shutdownTransport(): Future[Done] = {
-    implicit val ec: ExecutionContext = materializer.executionContext
+    import system.dispatcher
     inboundKillSwitch.shutdown()
     unbind().map { _ ⇒
       topLevelFlightRecorder.loFreq(Transport_Stopped, NoMetaData)
@@ -417,9 +417,9 @@ private[remote] class ArteryTcpTransport(_system: ExtendedActorSystem, _provider
   }
 
   private def unbind(): Future[Done] = {
-    implicit val ec: ExecutionContext = materializer.executionContext
     serverBinding match {
       case Some(binding) ⇒
+        import system.dispatcher
         for {
           b ← binding
           _ ← b.unbind()
