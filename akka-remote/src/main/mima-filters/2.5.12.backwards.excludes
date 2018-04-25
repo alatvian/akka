@@ -1,0 +1,3 @@
+# #24972 Artery internals
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.remote.artery.compress.InboundCompression.confirmAdvertisement")
+
